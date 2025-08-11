@@ -344,14 +344,7 @@ async def search_products(
 @router.get("/searches/{search_id}", response_model=SimilarProductsResponse)
 async def get_search_results(
     search_id: int,
-    db: Session = Depends(get_db),
-    filter: Optional[ProductFilter] = Depends(),
-    args: Optional[List[str]] = Query(None, description="Optional positional arguments for custom processing"),
-    sort_by: Optional[str] = Query(None, description="Optional sorting parameter (e.g., 'price_asc', 'price_desc')"),
-    limit: Optional[int] = Query(None, description="Optional limit for number of results"),
-    offset: Optional[int] = Query(None, description="Optional offset for pagination"),
-    include_fields: Optional[List[str]] = Query(None, description="Optional fields to include in the response"),
-    exclude_fields: Optional[List[str]] = Query(None, description="Optional fields to exclude from the response")
+    db: Session = Depends(get_db)
 ):
     """
     Get the results of a previous search
@@ -359,14 +352,6 @@ async def get_search_results(
     Args:
         search_id: ID of the search
         db: Database session
-        filter: Optional filter criteria for results (brand, price_min, price_max, source)
-        args: Optional list of positional arguments that can be used for custom processing logic
-              Example: ?args=value1&args=value2
-        sort_by: Optional sorting parameter (e.g., 'price_asc', 'price_desc')
-        limit: Optional limit for number of results
-        offset: Optional offset for pagination
-        include_fields: Optional fields to include in the response
-        exclude_fields: Optional fields to exclude from the response
         
     Returns:
         SimilarProductsResponse with search results
@@ -377,46 +362,9 @@ async def get_search_results(
     if not db_search:
         raise HTTPException(status_code=404, detail="Search not found")
     
-    # Log args if provided
-    if args:
-        logger.info(f"Custom args provided: {args}")
-    
-    # Get filtered results if filter is provided
-    if filter and (filter.brand or filter.price_min is not None or 
-                  filter.price_max is not None or filter.source):
-        results_data, total = await get_filtered_results(db, search_id, filter)
-        logger.info(f"Filtered results: {total} matches")
-    else:
-        results_data = db_search.results
-    
-    # Create a dictionary to collect all query parameters for logging
-    query_params = {
-        "sort_by": sort_by,
-        "limit": limit,
-        "offset": offset,
-        "include_fields": include_fields,
-        "exclude_fields": exclude_fields
-    }
-    logger.info(f"Query parameters: {query_params}")
-    
-    # Apply sorting if requested
-    if sort_by:
-        logger.info(f"Sorting results by: {sort_by}")
-        if sort_by == "price_asc":
-            # This is a simplified example - in a real implementation, 
-            # you would need proper price parsing logic
-            results_data = sorted(results_data, key=lambda x: x.price if x.price else "")
-        elif sort_by == "price_desc":
-            results_data = sorted(results_data, key=lambda x: x.price if x.price else "", reverse=True)
-    
-    # Apply pagination if requested
-    if offset is not None:
-        results_data = results_data[offset:]
-        logger.info(f"Applied offset: {offset}")
-    
-    if limit is not None:
-        results_data = results_data[:limit]
-        logger.info(f"Applied limit: {limit}")
+    # Get all results for this search
+    results_data = db_search.results
+    logger.info(f"Retrieved {len(results_data)} results for search ID: {search_id}")
     
     # Convert DB results to schema models
     results = [
