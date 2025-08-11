@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import os
 import logging
+import json
 
 from app.db.base import get_db
 from app.models.schemas import (
@@ -78,19 +79,62 @@ async def upload_image(
 
 @router.post("/clip", response_model=ImageClipResponse)
 async def clip_uploaded_image(
-    clip_request: ImageClipRequest,
-    cloudinary_public_id: Optional[str] = Form(None)
+    clip_request: Optional[ImageClipRequest] = None,
+    clip_request_str: Optional[str] = Form(None),
+    cloudinary_public_id: Optional[str] = Form(None),
+    # Individual form fields for direct form submission
+    image_path: Optional[str] = Form(None),
+    x: Optional[int] = Form(None),
+    y: Optional[int] = Form(None),
+    width: Optional[int] = Form(None),
+    height: Optional[int] = Form(None)
 ):
     """
     Clip an uploaded image to the specified dimensions
     
+    This endpoint supports three ways to provide the clipping parameters:
+    1. As a JSON body with clip_request object
+    2. As a form field with clip_request_str containing a JSON string
+    3. As individual form fields (image_path, x, y, width, height)
+    
     Args:
-        clip_request: Request containing image path and clipping coordinates
+        clip_request: Request containing image path and clipping coordinates (JSON body)
+        clip_request_str: JSON string representation of clip_request (form field)
         cloudinary_public_id: Cloudinary public ID of the original image
+        image_path, x, y, width, height: Individual form fields for direct form submission
         
     Returns:
         ImageClipResponse with the path to the clipped image
     """
+    # Determine which input method was used and create a clip_request object
+    if clip_request is None:
+        if clip_request_str:
+            # Parse the JSON string from form field
+            try:
+                import json
+                clip_data = json.loads(clip_request_str)
+                clip_request = ImageClipRequest(**clip_data)
+                logger.info(f"Using clip_request from JSON string: {clip_request}")
+            except Exception as e:
+                logger.error(f"Error parsing clip_request_str: {str(e)}")
+                raise HTTPException(status_code=400, detail=f"Invalid clip_request JSON: {str(e)}")
+        elif image_path and x is not None and y is not None and width is not None and height is not None:
+            # Use individual form fields
+            clip_request = ImageClipRequest(
+                image_path=image_path,
+                x=x,
+                y=y,
+                width=width,
+                height=height
+            )
+            logger.info(f"Using clip_request from individual form fields: {clip_request}")
+        else:
+            raise HTTPException(
+                status_code=400, 
+                detail="Missing clip parameters. Provide either clip_request as JSON body, "
+                       "clip_request_str as form field with JSON string, or individual form fields."
+            )
+    
     # Check if the file exists (only for local paths)
     if not clip_request.image_path.startswith(('http://', 'https://')) and not os.path.exists(clip_request.image_path):
         raise HTTPException(status_code=404, detail="Image not found")
@@ -147,15 +191,21 @@ async def clip_uploaded_image_form(
 ):
     """
     Clip an uploaded image to the specified dimensions using form data
+    
+    This is a simplified endpoint that only accepts individual form fields.
+    For more options, use the /clip endpoint.
     """
-    clip_request = ImageClipRequest(
+    # Pass the parameters directly to the main clip endpoint
+    return await clip_uploaded_image(
+        clip_request=None,
+        clip_request_str=None,
+        cloudinary_public_id=cloudinary_public_id,
         image_path=image_path,
         x=x,
         y=y,
         width=width,
         height=height
     )
-    return await clip_uploaded_image(clip_request, cloudinary_public_id)
 
 @router.post("/search", response_model=SimilarProductsResponse)
 async def search_products(
