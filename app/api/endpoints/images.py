@@ -347,7 +347,11 @@ async def get_search_results(
     db: Session = Depends(get_db),
     filter: Optional[ProductFilter] = Depends(),
     args: Optional[List[str]] = Query(None, description="Optional positional arguments for custom processing"),
-    kwargs: Optional[Dict[str, Any]] = Query(None, description="Optional keyword arguments for custom processing")
+    sort_by: Optional[str] = Query(None, description="Optional sorting parameter (e.g., 'price_asc', 'price_desc')"),
+    limit: Optional[int] = Query(None, description="Optional limit for number of results"),
+    offset: Optional[int] = Query(None, description="Optional offset for pagination"),
+    include_fields: Optional[List[str]] = Query(None, description="Optional fields to include in the response"),
+    exclude_fields: Optional[List[str]] = Query(None, description="Optional fields to exclude from the response")
 ):
     """
     Get the results of a previous search
@@ -358,9 +362,11 @@ async def get_search_results(
         filter: Optional filter criteria for results (brand, price_min, price_max, source)
         args: Optional list of positional arguments that can be used for custom processing logic
               Example: ?args=value1&args=value2
-        kwargs: Optional dictionary of keyword arguments for custom processing
-                These can be provided as query parameters with dot notation for nested objects
-                Example: ?kwargs.key1=value1&kwargs.key2=value2
+        sort_by: Optional sorting parameter (e.g., 'price_asc', 'price_desc')
+        limit: Optional limit for number of results
+        offset: Optional offset for pagination
+        include_fields: Optional fields to include in the response
+        exclude_fields: Optional fields to exclude from the response
         
     Returns:
         SimilarProductsResponse with search results
@@ -371,11 +377,9 @@ async def get_search_results(
     if not db_search:
         raise HTTPException(status_code=404, detail="Search not found")
     
-    # Log args and kwargs if provided
+    # Log args if provided
     if args:
         logger.info(f"Custom args provided: {args}")
-    if kwargs:
-        logger.info(f"Custom kwargs provided: {kwargs}")
     
     # Get filtered results if filter is provided
     if filter and (filter.brand or filter.price_min is not None or 
@@ -384,17 +388,35 @@ async def get_search_results(
         logger.info(f"Filtered results: {total} matches")
     else:
         results_data = db_search.results
-        
-    # Apply custom processing based on args and kwargs if needed
-    if args or kwargs:
-        logger.info("Applying custom processing based on args and kwargs")
-        # Example of custom processing (can be expanded based on requirements)
-        if kwargs and kwargs.get("sort_by") == "price_asc":
-            # Sort results by price in ascending order
-            # This is just an example - actual implementation would depend on requirements
-            logger.info("Sorting results by price (ascending)")
-            # Note: This would need proper price parsing logic in a real implementation
-            # This is just a placeholder for demonstration
+    
+    # Create a dictionary to collect all query parameters for logging
+    query_params = {
+        "sort_by": sort_by,
+        "limit": limit,
+        "offset": offset,
+        "include_fields": include_fields,
+        "exclude_fields": exclude_fields
+    }
+    logger.info(f"Query parameters: {query_params}")
+    
+    # Apply sorting if requested
+    if sort_by:
+        logger.info(f"Sorting results by: {sort_by}")
+        if sort_by == "price_asc":
+            # This is a simplified example - in a real implementation, 
+            # you would need proper price parsing logic
+            results_data = sorted(results_data, key=lambda x: x.price if x.price else "")
+        elif sort_by == "price_desc":
+            results_data = sorted(results_data, key=lambda x: x.price if x.price else "", reverse=True)
+    
+    # Apply pagination if requested
+    if offset is not None:
+        results_data = results_data[offset:]
+        logger.info(f"Applied offset: {offset}")
+    
+    if limit is not None:
+        results_data = results_data[:limit]
+        logger.info(f"Applied limit: {limit}")
     
     # Convert DB results to schema models
     results = [
