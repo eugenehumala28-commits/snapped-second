@@ -74,7 +74,8 @@ async def search_similar_products(image_url: str) -> List[Dict[str, Any]]:
     params = {
         "engine": "google_reverse_image",
         "image_url": image_url,
-        "api_key": settings.SERPAPI_API_KEY
+        "api_key": settings.SERPAPI_API_KEY,
+        "num": 100  # Request more results to ensure we have enough after filtering
     }
     
     # Make the API request with timeout and retries
