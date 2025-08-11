@@ -9,7 +9,8 @@ import json
 from app.db.base import get_db
 from app.models.schemas import (
     ImageUploadResponse, ImageClipResponse, SimilarProductsResponse, 
-    SearchResult, ImageClipRequest, SearchListResponse, ProductFilter
+    SearchResult, ImageClipRequest, SearchListResponse, ProductFilter,
+    ImageSearch
 )
 from app.utils.image_processing import (
     save_upload_file, clip_image, is_allowed_file, 
