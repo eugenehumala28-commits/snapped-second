@@ -53,8 +53,15 @@ async def upload_image(
         
         # Optimize the image if requested
         if optimize:
-            file_path = await optimize_image(file_path, max_size)
-            logger.info(f"Image optimized: {file_path}")
+            # Check if file_path is a URL (Cloudinary) or a local path
+            if file_path.startswith(('http://', 'https://')):
+                # For Cloudinary URLs, we can't optimize locally
+                logger.info(f"Skipping local optimization for Cloudinary URL: {file_path}")
+                # We could implement Cloudinary transformations here if needed
+            else:
+                # Only optimize local files
+                file_path = await optimize_image(file_path, max_size)
+                logger.info(f"Image optimized: {file_path}")
         
         return {
             "image_path": file_path, 
@@ -84,8 +91,8 @@ async def clip_uploaded_image(
     Returns:
         ImageClipResponse with the path to the clipped image
     """
-    # Check if the file exists
-    if not os.path.exists(clip_request.image_path):
+    # Check if the file exists (only for local paths)
+    if not clip_request.image_path.startswith(('http://', 'https://')) and not os.path.exists(clip_request.image_path):
         raise HTTPException(status_code=404, detail="Image not found")
     
     try:
@@ -181,8 +188,8 @@ async def search_products(
     Returns:
         SimilarProductsResponse with search results
     """
-    # Check if the file exists
-    if not os.path.exists(image_path):
+    # Check if the file exists (only for local paths)
+    if not image_path.startswith(('http://', 'https://')) and not os.path.exists(image_path):
         raise HTTPException(status_code=404, detail="Image not found")
     
     try:
@@ -401,8 +408,8 @@ async def get_dimensions(image_path: str):
     Returns:
         Dictionary with width and height
     """
-    # Check if the file exists
-    if not os.path.exists(image_path):
+    # Check if the file exists (only for local paths)
+    if not image_path.startswith(('http://', 'https://')) and not os.path.exists(image_path):
         raise HTTPException(status_code=404, detail="Image not found")
     
     try:

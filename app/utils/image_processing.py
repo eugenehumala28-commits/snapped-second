@@ -247,16 +247,43 @@ async def get_image_dimensions(image_path: str) -> Tuple[int, int]:
     Get the dimensions of an image
     
     Args:
-        image_path: Path to the image
+        image_path: Path to the image or URL
         
     Returns:
         Tuple of (width, height)
     """
     try:
-        dimensions = await run_in_threadpool(
-            lambda: Image.open(image_path).size
-        )
+        # Handle URLs (including Cloudinary URLs)
+        if image_path.startswith(('http://', 'https://')):
+            import httpx
+            import io
+            
+            # Download the image
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(image_path)
+                if response.status_code != 200:
+                    raise HTTPException(
+                        status_code=404, 
+                        detail=f"Could not download image from URL: {image_path}"
+                    )
+                
+                # Open the image from bytes
+                dimensions = await run_in_threadpool(
+                    lambda: Image.open(io.BytesIO(response.content)).size
+                )
+        else:
+            # Local file path
+            if not os.path.exists(image_path):
+                raise HTTPException(status_code=404, detail=f"Image file not found: {image_path}")
+                
+            dimensions = await run_in_threadpool(
+                lambda: Image.open(image_path).size
+            )
+            
         return dimensions
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
         logger.error(f"Error getting image dimensions: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error getting image dimensions: {str(e)}")
@@ -266,12 +293,25 @@ async def optimize_image(image_path: str, max_size: Optional[int] = None) -> str
     Optimize an image for web use
     
     Args:
-        image_path: Path to the image
+        image_path: Path to the image (must be a local file path, not a URL)
         max_size: Maximum dimension (width or height) in pixels
         
     Returns:
         Path to the optimized image
     """
+    # Validate that image_path is a local file path, not a URL
+    if image_path.startswith(('http://', 'https://')):
+        logger.error(f"Cannot optimize a URL directly: {image_path}")
+        raise HTTPException(
+            status_code=400, 
+            detail="Cannot optimize a URL directly. For Cloudinary images, use Cloudinary transformations instead."
+        )
+    
+    # Check if the file exists
+    if not os.path.exists(image_path):
+        logger.error(f"Image file not found: {image_path}")
+        raise HTTPException(status_code=404, detail=f"Image file not found: {image_path}")
+    
     try:
         optimized_path = await run_in_threadpool(
             _optimize_image_sync, image_path, max_size
