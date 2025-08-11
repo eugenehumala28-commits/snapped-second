@@ -345,7 +345,9 @@ async def search_products(
 async def get_search_results(
     search_id: int,
     db: Session = Depends(get_db),
-    filter: Optional[ProductFilter] = Depends()
+    filter: Optional[ProductFilter] = Depends(),
+    args: Optional[List[str]] = Query(None, description="Optional positional arguments for custom processing"),
+    kwargs: Optional[Dict[str, Any]] = Query(None, description="Optional keyword arguments for custom processing")
 ):
     """
     Get the results of a previous search
@@ -353,7 +355,12 @@ async def get_search_results(
     Args:
         search_id: ID of the search
         db: Database session
-        filter: Optional filter criteria for results
+        filter: Optional filter criteria for results (brand, price_min, price_max, source)
+        args: Optional list of positional arguments that can be used for custom processing logic
+              Example: ?args=value1&args=value2
+        kwargs: Optional dictionary of keyword arguments for custom processing
+                These can be provided as query parameters with dot notation for nested objects
+                Example: ?kwargs.key1=value1&kwargs.key2=value2
         
     Returns:
         SimilarProductsResponse with search results
@@ -364,6 +371,12 @@ async def get_search_results(
     if not db_search:
         raise HTTPException(status_code=404, detail="Search not found")
     
+    # Log args and kwargs if provided
+    if args:
+        logger.info(f"Custom args provided: {args}")
+    if kwargs:
+        logger.info(f"Custom kwargs provided: {kwargs}")
+    
     # Get filtered results if filter is provided
     if filter and (filter.brand or filter.price_min is not None or 
                   filter.price_max is not None or filter.source):
@@ -371,6 +384,17 @@ async def get_search_results(
         logger.info(f"Filtered results: {total} matches")
     else:
         results_data = db_search.results
+        
+    # Apply custom processing based on args and kwargs if needed
+    if args or kwargs:
+        logger.info("Applying custom processing based on args and kwargs")
+        # Example of custom processing (can be expanded based on requirements)
+        if kwargs and kwargs.get("sort_by") == "price_asc":
+            # Sort results by price in ascending order
+            # This is just an example - actual implementation would depend on requirements
+            logger.info("Sorting results by price (ascending)")
+            # Note: This would need proper price parsing logic in a real implementation
+            # This is just a placeholder for demonstration
     
     # Convert DB results to schema models
     results = [
